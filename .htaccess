@@ -1,0 +1,10 @@
+# GoDaddy / Apache hosting: the Apple file has NO extension, so force JSON.
+<Files "apple-app-site-association">
+  ForceType application/json
+</Files>
+
+# Allow the .well-known folder to be served
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^\.well-known/ - [L]
+</IfModule>

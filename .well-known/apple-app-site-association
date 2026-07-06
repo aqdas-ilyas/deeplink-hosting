@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["ZC7LDM9583.org.reactjs.native.example.GetOutThere"],
+        "components": [
+          {
+            "/": "/trip/*",
+            "comment": "Opens a shared trip in the app"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+# Netlify/Cloudflare Pages: force the correct content-type for the Apple file
+# (it has no extension, and iOS requires application/json).
+/.well-known/apple-app-site-association
+  Content-Type: application/json
+/.well-known/assetlinks.json
+  Content-Type: application/json
