@@ -81,20 +81,26 @@
       // Note: with the app installed, Universal Links / App Links normally open
       // it straight from the tap and this page never loads. Reaching this page
       // means the link was opened in a browser context, so:
-      if (tripId && isAndroid) {
-        // Chrome opens the app natively via intent:// when it's installed.
-        // The Play fallback is attached only once the listing is live.
-        window.location =
-          'intent://trip/' + tripId +
-          '#Intent;scheme=getoutthere;package=com.getoutthere' +
-          (PLAY_STORE_URL ? ';S.browser_fallback_url=' + encodeURIComponent(PLAY_STORE_URL) : '') +
-          ';end';
-        setTimeout(finishAttempt, 2000);
-      } else if (tripId && isIOS) {
-        // Opens the app if installed; otherwise iOS shows a dismissable alert
-        // and settle() takes over.
-        window.location = appLink;
-        setTimeout(finishAttempt, 2000);
+      if (tripId && (isAndroid || isIOS)) {
+        // Let the splash show for ~2s before moving — feels deliberate, and
+        // some in-app browsers ignore redirects fired instantly on load.
+        setTimeout(function () {
+          if (appOpened) return;
+          if (isAndroid) {
+            // Chrome opens the app natively via intent:// when it's installed.
+            // The Play fallback is attached only once the listing is live.
+            window.location =
+              'intent://trip/' + tripId +
+              '#Intent;scheme=getoutthere;package=com.getoutthere' +
+              (PLAY_STORE_URL ? ';S.browser_fallback_url=' + encodeURIComponent(PLAY_STORE_URL) : '') +
+              ';end';
+          } else {
+            // Opens the app if installed; otherwise iOS shows a dismissable
+            // alert and settle() takes over.
+            window.location = appLink;
+          }
+          setTimeout(finishAttempt, 2000);
+        }, 2000);
       } else {
         // Desktop or no trip id — nothing to auto-open.
         finishAttempt();
