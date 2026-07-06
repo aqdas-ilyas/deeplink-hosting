@@ -13,10 +13,15 @@
     * { box-sizing:border-box; }
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
       background:#EEF2F8; color:var(--navy); display:flex; min-height:100vh; align-items:center; justify-content:center; padding:24px; }
+    .loading { text-align:center; }
+    .spinner { width:36px; height:36px; margin:0 auto 14px; border-radius:50%;
+      border:3px solid #d5dbe6; border-top-color:var(--navy); animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .loading p { margin:0; color:#555; font-size:15px; }
     .card { background:#fff; border-radius:16px; padding:28px 24px; max-width:380px; width:100%;
-      box-shadow:0 10px 30px rgba(0,0,0,.08); text-align:center; }
+      box-shadow:0 10px 30px rgba(0,0,0,.08); text-align:center; display:none; }
     h1 { margin:0 0 4px; font-size:22px; }
-    p { margin:0 0 20px; color:#555; }
+    .card p { margin:0 0 20px; color:#555; }
     .btn { display:block; background:var(--navy); color:#fff; text-decoration:none; padding:14px;
       border-radius:12px; font-weight:700; margin-bottom:12px; }
     .stores { display:flex; gap:10px; margin-top:8px; }
@@ -26,7 +31,14 @@
   </style>
 </head>
 <body>
-  <div class="card">
+  <!-- Shown while we silently try to open the app / reach the store. -->
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Opening in GetOutThere…</p>
+  </div>
+
+  <!-- Manual fallback: only revealed if the automatic redirect didn't work. -->
+  <div id="card" class="card">
     <h1>GetOutThere</h1>
     <p>Open this trip in the app.</p>
     <a id="openApp" class="btn" href="#">Open in App</a>
@@ -63,38 +75,49 @@
       var playUrl = document.getElementById('playStore').href;
 
       // If the app opens, this page loses visibility — remember that so the
-      // delayed store redirect doesn't fire behind the user's back.
+      // delayed store redirect / fallback card don't fire behind the user's back.
       var appOpened = false;
       function markOpened() { if (document.hidden || !document.hasFocus()) appOpened = true; }
       document.addEventListener('visibilitychange', markOpened);
       window.addEventListener('pagehide', function () { appOpened = true; });
       window.addEventListener('blur', markOpened);
 
+      // The buttons are a last resort: only reveal them if the automatic
+      // redirect didn't take the user anywhere.
+      function showCard() {
+        if (appOpened || document.hidden) return;
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('card').style.display = 'block';
+      }
+
       // Note: with the app installed, Universal Links / App Links normally open
       // it straight from the tap and this page never loads. Reaching this page
       // means the link was opened in a browser context, so:
-      if (tripId) {
-        if (isAndroid) {
-          // Chrome checks installation natively via intent:// — opens the app
-          // if installed, otherwise goes to the Play Store fallback URL.
-          window.location =
-            'intent://trip/' + tripId +
-            '#Intent;scheme=getoutthere;package=com.getoutthere' +
-            ';S.browser_fallback_url=' + encodeURIComponent(playUrl) + ';end';
-          // Safety net for browsers/webviews that ignore intent:// links.
-          setTimeout(function () {
-            if (!appOpened && !document.hidden) window.location = playUrl;
-          }, 2000);
-        } else if (isIOS) {
-          // Try the custom scheme (opens the app if installed), then fall back
-          // to the App Store — but only if the app didn't open.
-          window.location = appLink;
-          setTimeout(function () {
-            if (!appOpened && !document.hidden && appStoreReady) {
-              window.location = appStoreBtn.href;
-            }
-          }, 1600);
-        }
+      if (tripId && isAndroid) {
+        // Chrome checks installation natively via intent:// — opens the app
+        // if installed, otherwise goes to the Play Store fallback URL.
+        window.location =
+          'intent://trip/' + tripId +
+          '#Intent;scheme=getoutthere;package=com.getoutthere' +
+          ';S.browser_fallback_url=' + encodeURIComponent(playUrl) + ';end';
+        // Safety net for browsers/webviews that ignore intent:// links.
+        setTimeout(function () {
+          if (!appOpened && !document.hidden) window.location = playUrl;
+        }, 2000);
+        setTimeout(showCard, 2800);
+      } else if (tripId && isIOS) {
+        // Try the custom scheme (opens the app if installed), then fall back
+        // to the App Store — but only if the app didn't open.
+        window.location = appLink;
+        setTimeout(function () {
+          if (!appOpened && !document.hidden && appStoreReady) {
+            window.location = appStoreBtn.href;
+          }
+        }, 1600);
+        setTimeout(showCard, 2400);
+      } else {
+        // Desktop or no trip id — nothing to auto-open.
+        showCard();
       }
     })();
   </script>
