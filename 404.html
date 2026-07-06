@@ -56,8 +56,14 @@
       // Only visibilitychange/pagehide are trusted: `blur` also fires for the
       // harmless "cannot open page" alert on iOS, which is NOT the app opening.
       var appOpened = false;
+      var attemptDone = false;
       document.addEventListener('visibilitychange', function () {
-        if (document.hidden) appOpened = true;
+        if (document.hidden) {
+          appOpened = true;
+        } else if (attemptDone) {
+          // Loaded in a background tab: settle now that the user can see it.
+          settle();
+        }
       });
       window.addEventListener('pagehide', function () { appOpened = true; });
 
@@ -70,6 +76,7 @@
         document.getElementById('spin').style.display = 'none';
         document.getElementById('note').style.display = 'block';
       }
+      function finishAttempt() { attemptDone = true; settle(); }
 
       // Note: with the app installed, Universal Links / App Links normally open
       // it straight from the tap and this page never loads. Reaching this page
@@ -82,15 +89,15 @@
           '#Intent;scheme=getoutthere;package=com.getoutthere' +
           (PLAY_STORE_URL ? ';S.browser_fallback_url=' + encodeURIComponent(PLAY_STORE_URL) : '') +
           ';end';
-        setTimeout(settle, 2000);
+        setTimeout(finishAttempt, 2000);
       } else if (tripId && isIOS) {
         // Opens the app if installed; otherwise iOS shows a dismissable alert
         // and settle() takes over.
         window.location = appLink;
-        setTimeout(settle, 2000);
+        setTimeout(finishAttempt, 2000);
       } else {
         // Desktop or no trip id — nothing to auto-open.
-        settle();
+        finishAttempt();
       }
     })();
   </script>
