@@ -11,61 +11,38 @@
   <style>
     :root { --navy:#001A3B; }
     * { box-sizing:border-box; }
-    /* Full-bleed navy, styled like the app's splash screen so the brief
-       redirect hop doesn't read as "a web page opened". */
+    /* Full-bleed navy, styled like the app's splash screen. No buttons on this
+       page by design — it either opens the app, redirects to a store (once the
+       app is live there), or shows a single install note. */
     body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
-      background:var(--navy); color:var(--navy); display:flex; min-height:100vh; align-items:center; justify-content:center; padding:24px; }
-    .loading { text-align:center; }
-    .loading h2 { margin:0 0 18px; color:#fff; font-size:26px; letter-spacing:.5px; }
+      background:var(--navy); display:flex; min-height:100vh; align-items:center; justify-content:center; padding:24px; }
+    .wrap { text-align:center; }
+    .wrap h2 { margin:0 0 18px; color:#fff; font-size:26px; letter-spacing:.5px; }
     .spinner { width:34px; height:34px; margin:0 auto; border-radius:50%;
       border:3px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin .8s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
-    .card { background:#fff; border-radius:16px; padding:28px 24px; max-width:380px; width:100%;
-      box-shadow:0 10px 30px rgba(0,0,0,.08); text-align:center; display:none; }
-    h1 { margin:0 0 4px; font-size:22px; }
-    .card p { margin:0 0 20px; color:#555; }
-    .btn { display:block; background:var(--navy); color:#fff; text-decoration:none; padding:14px;
-      border-radius:12px; font-weight:700; margin-bottom:12px; }
-    .stores { display:flex; gap:10px; margin-top:8px; }
-    .stores a { flex:1; border:1px solid #d5dbe6; border-radius:12px; padding:12px; text-decoration:none;
-      color:var(--navy); font-weight:600; font-size:14px; }
-    .muted { font-size:12px; color:#999; margin-top:16px; }
+    #note { display:none; margin:0 auto; color:rgba(255,255,255,.85); font-size:15px; line-height:1.5; max-width:300px; }
   </style>
 </head>
 <body>
-  <!-- Shown while we silently try to open the app / reach the store. -->
-  <div id="loading" class="loading">
+  <div class="wrap">
     <h2>GetOutThere</h2>
-    <div class="spinner"></div>
-  </div>
-
-  <!-- Manual fallback: only revealed if the automatic redirect didn't work. -->
-  <div id="card" class="card">
-    <h1>GetOutThere</h1>
-    <p>Open this trip in the app.</p>
-    <a id="openApp" class="btn" href="#">Open in App</a>
-    <div class="stores">
-      <a id="appStore" href="REPLACE_APP_STORE_URL">App Store</a>
-      <a id="playStore" href="https://play.google.com/store/apps/details?id=com.getoutthere">Google Play</a>
-    </div>
-    <p class="muted">Don't have the app? Install it and open this link again.</p>
+    <div id="spin" class="spinner"></div>
+    <p id="note">Install the GetOutThere app to view this trip.</p>
   </div>
 
   <script>
     (function () {
+      // Fill these in once the app is LIVE in each store — the page will then
+      // send not-installed users there automatically. While empty, users see
+      // the install note instead (a dead store link would show a 404).
+      var PLAY_STORE_URL = '';
+      var APP_STORE_URL = '';
+
       // /trip/<id>  ->  tripId
       var m = location.pathname.match(/\/trip\/([a-zA-Z0-9]+)/);
       var tripId = m ? m[1] : '';
       var appLink = 'getoutthere://trip/' + tripId;
-
-      var openBtn = document.getElementById('openApp');
-      openBtn.href = appLink;
-
-      // Until the app is live and REPLACE_APP_STORE_URL is filled in, hide the
-      // App Store button so iOS users aren't sent to a dead link.
-      var appStoreBtn = document.getElementById('appStore');
-      var appStoreReady = appStoreBtn.getAttribute('href').indexOf('REPLACE') === -1;
-      if (!appStoreReady) appStoreBtn.style.display = 'none';
 
       // Deferred deep linking (free): stash the target so the app can read it
       // from the clipboard on first launch after a fresh install.
@@ -74,52 +51,46 @@
       var ua = navigator.userAgent || '';
       var isIOS = /iPhone|iPad|iPod/i.test(ua);
       var isAndroid = /Android/i.test(ua);
-      var playUrl = document.getElementById('playStore').href;
 
-      // If the app opens, this page loses visibility — remember that so the
-      // delayed store redirect / fallback card don't fire behind the user's back.
+      // If the app opens, this page is hidden — nothing else should happen.
+      // Only visibilitychange/pagehide are trusted: `blur` also fires for the
+      // harmless "cannot open page" alert on iOS, which is NOT the app opening.
       var appOpened = false;
-      function markOpened() { if (document.hidden || !document.hasFocus()) appOpened = true; }
-      document.addEventListener('visibilitychange', markOpened);
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) appOpened = true;
+      });
       window.addEventListener('pagehide', function () { appOpened = true; });
-      window.addEventListener('blur', markOpened);
 
-      // The buttons are a last resort: only reveal them if the automatic
-      // redirect didn't take the user anywhere.
-      function showCard() {
+      // Called after the open-the-app attempt had its chance: either move on
+      // to the store (when live) or swap the spinner for the install note.
+      function settle() {
         if (appOpened || document.hidden) return;
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('card').style.display = 'block';
+        var store = isIOS ? APP_STORE_URL : (isAndroid ? PLAY_STORE_URL : '');
+        if (store) { window.location = store; return; }
+        document.getElementById('spin').style.display = 'none';
+        document.getElementById('note').style.display = 'block';
       }
 
       // Note: with the app installed, Universal Links / App Links normally open
       // it straight from the tap and this page never loads. Reaching this page
       // means the link was opened in a browser context, so:
       if (tripId && isAndroid) {
-        // Chrome checks installation natively via intent:// — opens the app
-        // if installed, otherwise goes to the Play Store fallback URL.
+        // Chrome opens the app natively via intent:// when it's installed.
+        // The Play fallback is attached only once the listing is live.
         window.location =
           'intent://trip/' + tripId +
           '#Intent;scheme=getoutthere;package=com.getoutthere' +
-          ';S.browser_fallback_url=' + encodeURIComponent(playUrl) + ';end';
-        // Safety net for browsers/webviews that ignore intent:// links.
-        setTimeout(function () {
-          if (!appOpened && !document.hidden) window.location = playUrl;
-        }, 2000);
-        setTimeout(showCard, 2800);
+          (PLAY_STORE_URL ? ';S.browser_fallback_url=' + encodeURIComponent(PLAY_STORE_URL) : '') +
+          ';end';
+        setTimeout(settle, 2000);
       } else if (tripId && isIOS) {
-        // Try the custom scheme (opens the app if installed), then fall back
-        // to the App Store — but only if the app didn't open.
+        // Opens the app if installed; otherwise iOS shows a dismissable alert
+        // and settle() takes over.
         window.location = appLink;
-        setTimeout(function () {
-          if (!appOpened && !document.hidden && appStoreReady) {
-            window.location = appStoreBtn.href;
-          }
-        }, 1600);
-        setTimeout(showCard, 2400);
+        setTimeout(settle, 2000);
       } else {
         // Desktop or no trip id — nothing to auto-open.
-        showCard();
+        settle();
       }
     })();
   </script>
