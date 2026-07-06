@@ -60,16 +60,41 @@
       var ua = navigator.userAgent || '';
       var isIOS = /iPhone|iPad|iPod/i.test(ua);
       var isAndroid = /Android/i.test(ua);
+      var playUrl = document.getElementById('playStore').href;
 
-      // If the app is installed, the Universal Link / App Link opens it directly
-      // (this page never loads). Reaching here usually means it is NOT installed,
-      // so try the app scheme once, then fall back to the right store.
+      // If the app opens, this page loses visibility — remember that so the
+      // delayed store redirect doesn't fire behind the user's back.
+      var appOpened = false;
+      function markOpened() { if (document.hidden || !document.hasFocus()) appOpened = true; }
+      document.addEventListener('visibilitychange', markOpened);
+      window.addEventListener('pagehide', function () { appOpened = true; });
+      window.addEventListener('blur', markOpened);
+
+      // Note: with the app installed, Universal Links / App Links normally open
+      // it straight from the tap and this page never loads. Reaching this page
+      // means the link was opened in a browser context, so:
       if (tripId) {
-        setTimeout(function () { window.location = appLink; }, 100);
-        setTimeout(function () {
-          if (isIOS && appStoreReady) window.location = appStoreBtn.href;
-          else if (isAndroid) window.location = document.getElementById('playStore').href;
-        }, 1600);
+        if (isAndroid) {
+          // Chrome checks installation natively via intent:// — opens the app
+          // if installed, otherwise goes to the Play Store fallback URL.
+          window.location =
+            'intent://trip/' + tripId +
+            '#Intent;scheme=getoutthere;package=com.getoutthere' +
+            ';S.browser_fallback_url=' + encodeURIComponent(playUrl) + ';end';
+          // Safety net for browsers/webviews that ignore intent:// links.
+          setTimeout(function () {
+            if (!appOpened && !document.hidden) window.location = playUrl;
+          }, 2000);
+        } else if (isIOS) {
+          // Try the custom scheme (opens the app if installed), then fall back
+          // to the App Store — but only if the app didn't open.
+          window.location = appLink;
+          setTimeout(function () {
+            if (!appOpened && !document.hidden && appStoreReady) {
+              window.location = appStoreBtn.href;
+            }
+          }, 1600);
+        }
       }
     })();
   </script>
